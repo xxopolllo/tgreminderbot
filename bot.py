@@ -285,7 +285,11 @@ async def list_reminders(message: Message, state: FSMContext) -> None:
         "Список активных напоминаний:\n" + "\n".join(lines),
         reply_markup=main_keyboard(),
     )
-    await message.answer("Хотите редактировать?", reply_markup=edit_inline_keyboard())
+    await state.set_state(EditReminder.choose_id)
+    await message.answer(
+        "Выберите номер напоминания из списка.",
+        reply_markup=edit_number_keyboard(len(ids)),
+    )
 
 
 async def edit_start(call: CallbackQuery, state: FSMContext) -> None:
