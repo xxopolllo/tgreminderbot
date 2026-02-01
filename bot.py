@@ -77,6 +77,7 @@ def edit_field_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="Дата")],
             [KeyboardButton(text="Периодичность")],
             [KeyboardButton(text="Группа")],
+            [KeyboardButton(text="Удалить")],
         ],
         resize_keyboard=True,
         one_time_keyboard=True,
@@ -283,12 +284,17 @@ async def edit_choose_field(message: Message, state: FSMContext) -> None:
         "Дата": "date",
         "Периодичность": "period",
         "Группа": "chat",
+        "Удалить": "delete",
     }
     field = field_map.get(message.text or "")
     if not field:
         await message.answer("Выберите поле из списка.")
         return
     await state.update_data(edit_field=field)
+    if field == "delete":
+        await state.set_state(EditReminder.confirm)
+        await message.answer("Подтвердите удаление.", reply_markup=save_keyboard())
+        return
     await state.set_state(EditReminder.enter_value)
     if field == "period":
         await message.answer("Выберите период.", reply_markup=period_keyboard())
@@ -343,6 +349,7 @@ async def edit_confirm(
         await state.clear()
         await message.answer("Изменения отменены.", reply_markup=main_keyboard())
         return
+    data = await state.get_data()
     if (message.text or "").strip() == "Удалить":
         data = await state.get_data()
         reminder_id = data.get("reminder_id")
@@ -352,10 +359,12 @@ async def edit_confirm(
         await state.clear()
         await message.answer("Напоминание удалено.", reply_markup=main_keyboard())
         return
+    if data.get("edit_field") == "delete":
+        await message.answer("Нажмите «Удалить» или «Отмена».")
+        return
     if (message.text or "").strip() != "Сохранить":
         await message.answer("Нажмите «Сохранить» или «Отмена».")
         return
-
     data = await state.get_data()
     reminder_id = data["reminder_id"]
     reminder = storage.get_reminder(config.DB_PATH, reminder_id)
