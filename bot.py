@@ -156,10 +156,17 @@ async def id_handler(message: Message) -> None:
     chat = message.chat
     title = chat.title or chat.full_name or "Без названия"
     safe_title = html.escape(title)
-    await message.answer(
-        f"ID чата: <code>{chat.id}</code>\nНазвание: {safe_title}",
+    sent = await message.answer(
+        "ID чата: <code>{chat_id}</code>\n"
+        "(нажмите один раз на цифры, чтобы скопировать)\n"
+        "Название: {title}".format(chat_id=chat.id, title=safe_title),
         parse_mode="HTML",
     )
+    await asyncio.sleep(60)
+    try:
+        await sent.delete()
+    except Exception:
+        pass
 
 
 async def add_start(message: Message, state: FSMContext) -> None:
