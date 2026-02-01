@@ -1,4 +1,5 @@
 import asyncio
+import html
 from datetime import datetime
 import re
 from typing import Optional
@@ -154,7 +155,11 @@ async def start_handler(message: Message) -> None:
 async def id_handler(message: Message) -> None:
     chat = message.chat
     title = chat.title or chat.full_name or "Без названия"
-    await message.answer(f"ID чата: {chat.id}\nНазвание: {title}")
+    safe_title = html.escape(title)
+    await message.answer(
+        f"ID чата: <code>{chat.id}</code>\nНазвание: {safe_title}",
+        parse_mode="HTML",
+    )
 
 
 async def add_start(message: Message, state: FSMContext) -> None:
@@ -168,7 +173,7 @@ async def add_start(message: Message, state: FSMContext) -> None:
 async def add_text(message: Message, state: FSMContext) -> None:
     await state.update_data(text=message.text.strip())
     await state.set_state(AddReminder.date)
-    await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ (MSK).")
+    await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ по Москве.")
 
 
 async def add_date(message: Message, state: FSMContext) -> None:
@@ -190,7 +195,7 @@ async def add_period(message: Message, state: FSMContext) -> None:
     await state.update_data(period=period)
     await state.set_state(AddReminder.chat)
     await message.answer(
-        "Укажите @username/ссылку/ID. Для закрытых групп добавьте бота в группу и отправьте там /id."
+        "Для групп добавьте бота в группу и отправьте там /id. Далее отправьте ID в эту группу."
     )
 
 
@@ -212,7 +217,12 @@ async def add_chat(
         data["date"], data["period"], now=datetime.now(tz)
     )
     reminder_id = storage.add_reminder(
-        config.DB_PATH, data["text"], next_run, data["period"], chat_ref
+        config.DB_PATH,
+        message.from_user.id,
+        data["text"],
+        next_run,
+        data["period"],
+        chat_ref,
     )
     reminder = storage.get_reminder(config.DB_PATH, reminder_id)
     if reminder:
@@ -230,7 +240,9 @@ async def list_reminders(message: Message, state: FSMContext) -> None:
     if message.chat.type != ChatType.PRIVATE:
         return
     await state.clear()
-    reminders = list(storage.list_active_reminders(config.DB_PATH))
+    reminders = list(
+        storage.list_active_reminders(config.DB_PATH, message.from_user.id)
+    )
     if not reminders:
         await message.answer("Активных напоминаний нет.", reply_markup=main_keyboard())
         return
@@ -299,10 +311,10 @@ async def edit_choose_field(message: Message, state: FSMContext) -> None:
     if field == "period":
         await message.answer("Выберите период.", reply_markup=period_keyboard())
     elif field == "date":
-        await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ (MSK).")
+        await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ по Москве.")
     elif field == "chat":
         await message.answer(
-            "Укажите @username/ID. Для закрытых групп добавьте бота в группу и отправьте там /id."
+            "Для групп добавьте бота в группу и отправьте там /id. Далее отправьте ID в эту группу."
         )
     else:
         await message.answer("Введите новый текст напоминания.")
@@ -439,7 +451,7 @@ async def main() -> None:
     scheduler = reminder_scheduler.build_scheduler(config.TIMEZONE)
     scheduler.start()
     dp["scheduler"] = scheduler
-    for reminder in storage.list_active_reminders(config.DB_PATH):
+    for reminder in storage.list_all_active_reminders(config.DB_PATH):
         reminder_scheduler.schedule_reminder(
             scheduler, reminder, bot, config.DB_PATH, config.TIMEZONE
         )

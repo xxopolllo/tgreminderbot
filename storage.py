@@ -19,12 +19,22 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return conn
 
 
+def _ensure_owner_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(reminders)").fetchall()
+    column_names = {row["name"] for row in columns}
+    if "owner_user_id" not in column_names:
+        conn.execute(
+            "ALTER TABLE reminders ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0"
+        )
+
+
 def init_db(db_path: str) -> None:
     with _connect(db_path) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS reminders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                owner_user_id INTEGER NOT NULL,
                 text TEXT NOT NULL,
                 next_run TEXT NOT NULL,
                 period TEXT NOT NULL,
@@ -36,12 +46,14 @@ def init_db(db_path: str) -> None:
             )
             """
         )
+        _ensure_owner_column(conn)
         conn.commit()
 
 
 def _row_to_reminder(row: sqlite3.Row) -> Reminder:
     return Reminder(
         id=row["id"],
+        owner_user_id=row["owner_user_id"],
         text=row["text"],
         next_run=datetime.fromisoformat(row["next_run"]),
         period=row["period"],
@@ -57,6 +69,7 @@ def _row_to_reminder(row: sqlite3.Row) -> Reminder:
 
 def add_reminder(
     db_path: str,
+    owner_user_id: int,
     text: str,
     next_run: datetime,
     period: str,
@@ -66,16 +79,30 @@ def add_reminder(
     with _connect(db_path) as conn:
         cursor = conn.execute(
             """
-            INSERT INTO reminders (text, next_run, period, chat_ref, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'active', ?, ?)
+            INSERT INTO reminders (owner_user_id, text, next_run, period, chat_ref, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
             """,
-            (text, next_run.isoformat(), period, chat_ref, now, now),
+            (owner_user_id, text, next_run.isoformat(), period, chat_ref, now, now),
         )
         conn.commit()
         return int(cursor.lastrowid)
 
 
-def list_active_reminders(db_path: str) -> Iterable[Reminder]:
+def list_active_reminders(db_path: str, owner_user_id: int) -> Iterable[Reminder]:
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM reminders
+            WHERE status = 'active'
+              AND owner_user_id = ?
+            ORDER BY next_run ASC, id ASC
+            """,
+            (owner_user_id,),
+        ).fetchall()
+        return [_row_to_reminder(row) for row in rows]
+
+
+def list_all_active_reminders(db_path: str) -> Iterable[Reminder]:
     with _connect(db_path) as conn:
         rows = conn.execute(
             """

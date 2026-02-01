@@ -6,6 +6,7 @@ from typing import Optional
 @dataclass
 class Reminder:
     id: int
+    owner_user_id: int
     text: str
     next_run: datetime
     period: str
