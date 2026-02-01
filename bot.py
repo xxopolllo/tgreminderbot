@@ -39,6 +39,7 @@ class EditReminder(StatesGroup):
 
 
 PERIOD_LABELS = {
+    "one_time": "Один раз",
     "daily": "Ежедневно",
     "weekly": "Еженедельно",
     "biweekly": "Раз в две недели",
@@ -61,6 +62,7 @@ def main_keyboard() -> ReplyKeyboardMarkup:
 def period_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text=PERIOD_LABELS["one_time"])],
             [KeyboardButton(text=PERIOD_LABELS["daily"])],
             [KeyboardButton(text=PERIOD_LABELS["weekly"])],
             [KeyboardButton(text=PERIOD_LABELS["biweekly"])],
@@ -90,10 +92,26 @@ def save_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [
                 KeyboardButton(text="Сохранить"),
-                KeyboardButton(text="Удалить"),
                 KeyboardButton(text="Отмена"),
             ]
         ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def delete_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Удалить"), KeyboardButton(text="Отмена")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+
+
+def edit_number_keyboard(count: int) -> ReplyKeyboardMarkup:
+    numbers = [KeyboardButton(text=str(i)) for i in range(1, count + 1)]
+    return ReplyKeyboardMarkup(
+        keyboard=[numbers] if numbers else [[KeyboardButton(text="1")]],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
@@ -277,7 +295,11 @@ async def edit_start(call: CallbackQuery, state: FSMContext) -> None:
         await call.message.answer("Сначала запросите список напоминаний.")
         return
     await state.set_state(EditReminder.choose_id)
-    await call.message.answer("Введите номер напоминания из списка.")
+    count = len(data["list_ids"])
+    await call.message.answer(
+        "Выберите номер напоминания из списка.",
+        reply_markup=edit_number_keyboard(count),
+    )
 
 
 async def edit_choose_id(message: Message, state: FSMContext) -> None:
@@ -312,7 +334,7 @@ async def edit_choose_field(message: Message, state: FSMContext) -> None:
     await state.update_data(edit_field=field)
     if field == "delete":
         await state.set_state(EditReminder.confirm)
-        await message.answer("Подтвердите удаление.", reply_markup=save_keyboard())
+        await message.answer("Подтвердите удаление.", reply_markup=delete_keyboard())
         return
     await state.set_state(EditReminder.enter_value)
     if field == "period":

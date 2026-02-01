@@ -12,6 +12,7 @@ from models import Reminder
 
 
 PERIODS = {
+    "one_time": None,
     "daily": timedelta(days=1),
     "weekly": timedelta(weeks=1),
     "biweekly": timedelta(weeks=2),
@@ -34,6 +35,8 @@ def compute_next_run(base_time: datetime, period: str, *, now: datetime) -> date
 
 
 def normalize_next_run(start_time: datetime, period: str, *, now: datetime) -> datetime:
+    if period == "one_time":
+        return start_time if start_time > now else now
     if start_time > now:
         return start_time
     return compute_next_run(start_time, period, now=now)
@@ -89,6 +92,9 @@ async def send_reminder(
         storage.update_reminder(db_path, reminder_id, last_sent_at=now)
     except Exception:
         now = datetime.now(ZoneInfo(timezone))
+    if reminder.period == "one_time":
+        storage.deactivate_reminder(db_path, reminder_id)
+        return
     next_run = compute_next_run(reminder.next_run, reminder.period, now=now)
     storage.update_reminder(db_path, reminder_id, next_run=next_run)
     refreshed = storage.get_reminder(db_path, reminder_id)
