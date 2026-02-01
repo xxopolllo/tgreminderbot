@@ -124,6 +124,17 @@ def normalize_chat_ref(text: str) -> Optional[str]:
     return None
 
 
+def extract_chat_ref(message: Message) -> Optional[str]:
+    if message.forward_from_chat:
+        chat = message.forward_from_chat
+        if chat.username:
+            return f"@{chat.username}"
+        return str(chat.id)
+    if message.text:
+        return normalize_chat_ref(message.text)
+    return None
+
+
 async def start_handler(message: Message) -> None:
     if message.chat.type != ChatType.PRIVATE:
         return
@@ -144,9 +155,7 @@ async def add_start(message: Message, state: FSMContext) -> None:
 async def add_text(message: Message, state: FSMContext) -> None:
     await state.update_data(text=message.text.strip())
     await state.set_state(AddReminder.date)
-    await message.answer(
-        f"Введите дату и время в формате {config.DATE_FORMAT} (MSK)."
-    )
+    await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ (MSK).")
 
 
 async def add_date(message: Message, state: FSMContext) -> None:
@@ -168,7 +177,7 @@ async def add_period(message: Message, state: FSMContext) -> None:
     await state.update_data(period=period)
     await state.set_state(AddReminder.chat)
     await message.answer(
-        "Укажите ссылку на группу или @username, куда отправлять напоминание."
+        "Перешлите сообщение из группы или укажите @username/ссылку/ID."
     )
 
 
@@ -178,10 +187,10 @@ async def add_chat(
     bot: Bot,
     scheduler,
 ) -> None:
-    chat_ref = normalize_chat_ref(message.text or "")
+    chat_ref = extract_chat_ref(message)
     if not chat_ref:
         await message.answer(
-            "Ссылка не распознана. Нужна публичная ссылка (t.me/...) или @username."
+            "Не смог определить группу. Перешлите сообщение из группы или укажите @username/ссылку/ID."
         )
         return
     data = await state.get_data()
@@ -272,11 +281,9 @@ async def edit_choose_field(message: Message, state: FSMContext) -> None:
     if field == "period":
         await message.answer("Выберите период.", reply_markup=period_keyboard())
     elif field == "date":
-        await message.answer(
-            f"Введите дату и время в формате {config.DATE_FORMAT} (MSK)."
-        )
+        await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ (MSK).")
     elif field == "chat":
-        await message.answer("Введите ссылку на группу или @username.")
+        await message.answer("Перешлите сообщение из группы или укажите @username/ID.")
     else:
         await message.answer("Введите новый текст напоминания.")
 
@@ -298,10 +305,10 @@ async def edit_enter_value(message: Message, state: FSMContext) -> None:
             return
         await state.update_data(new_value=parsed)
     elif field == "chat":
-        chat_ref = normalize_chat_ref(message.text or "")
+        chat_ref = extract_chat_ref(message)
         if not chat_ref:
             await message.answer(
-                "Ссылка не распознана. Нужна публичная ссылка или @username."
+                "Не смог определить группу. Перешлите сообщение из группы или укажите @username/ID."
             )
             return
         await state.update_data(new_value=chat_ref)
@@ -387,7 +394,7 @@ def setup_routes(router: Router) -> None:
 
 async def main() -> None:
     if not config.BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN is required")
+        raise RuntimeError("REMINDER_BOT_TOKEN is required")
 
     storage.init_db(config.DB_PATH)
     bot = Bot(token=config.BOT_TOKEN)
