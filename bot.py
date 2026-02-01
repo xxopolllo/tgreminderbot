@@ -85,7 +85,13 @@ def edit_field_keyboard() -> ReplyKeyboardMarkup:
 
 def save_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Сохранить"), KeyboardButton(text="Отмена")]],
+        keyboard=[
+            [
+                KeyboardButton(text="Сохранить"),
+                KeyboardButton(text="Удалить"),
+                KeyboardButton(text="Отмена"),
+            ]
+        ],
         resize_keyboard=True,
         one_time_keyboard=True,
     )
@@ -144,6 +150,12 @@ async def start_handler(message: Message) -> None:
     )
 
 
+async def id_handler(message: Message) -> None:
+    chat = message.chat
+    title = chat.title or chat.full_name or "Без названия"
+    await message.answer(f"ID чата: {chat.id}\nНазвание: {title}")
+
+
 async def add_start(message: Message, state: FSMContext) -> None:
     if message.chat.type != ChatType.PRIVATE:
         return
@@ -177,7 +189,7 @@ async def add_period(message: Message, state: FSMContext) -> None:
     await state.update_data(period=period)
     await state.set_state(AddReminder.chat)
     await message.answer(
-        "Перешлите сообщение из группы или укажите @username/ссылку/ID."
+        "Укажите @username/ссылку/ID. Для закрытых групп добавьте бота в группу и отправьте там /id."
     )
 
 
@@ -283,7 +295,9 @@ async def edit_choose_field(message: Message, state: FSMContext) -> None:
     elif field == "date":
         await message.answer("Введите дату и время в формате ДД.ММ.ГГГГ ЧЧ:ММ (MSK).")
     elif field == "chat":
-        await message.answer("Перешлите сообщение из группы или укажите @username/ID.")
+        await message.answer(
+            "Укажите @username/ID. Для закрытых групп добавьте бота в группу и отправьте там /id."
+        )
     else:
         await message.answer("Введите новый текст напоминания.")
 
@@ -328,6 +342,15 @@ async def edit_confirm(
     if (message.text or "").strip() == "Отмена":
         await state.clear()
         await message.answer("Изменения отменены.", reply_markup=main_keyboard())
+        return
+    if (message.text or "").strip() == "Удалить":
+        data = await state.get_data()
+        reminder_id = data.get("reminder_id")
+        if reminder_id:
+            storage.deactivate_reminder(config.DB_PATH, reminder_id)
+            reminder_scheduler.unschedule_reminder(scheduler, reminder_id)
+        await state.clear()
+        await message.answer("Напоминание удалено.", reply_markup=main_keyboard())
         return
     if (message.text or "").strip() != "Сохранить":
         await message.answer("Нажмите «Сохранить» или «Отмена».")
@@ -377,6 +400,7 @@ async def edit_confirm(
 
 def setup_routes(router: Router) -> None:
     router.message.register(start_handler, F.text == "/start")
+    router.message.register(id_handler, F.text == "/id")
     router.message.register(add_start, F.text == "Добавить напоминание")
     router.message.register(list_reminders, F.text == "Список напоминаний")
     router.callback_query.register(edit_start, F.data == "edit_reminders")
