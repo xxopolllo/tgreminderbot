@@ -16,6 +16,7 @@ PERIODS = {
     "daily": timedelta(days=1),
     "weekly": timedelta(weeks=1),
     "biweekly": timedelta(weeks=2),
+    "monthly": relativedelta(months=1),
     "quarterly": relativedelta(months=3),
 }
 

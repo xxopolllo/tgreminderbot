@@ -43,6 +43,7 @@ PERIOD_LABELS = {
     "daily": "Ежедневно",
     "weekly": "Еженедельно",
     "biweekly": "Раз в две недели",
+    "monthly": "Ежемесячно",
     "quarterly": "Раз в квартал",
 }
 
@@ -66,6 +67,7 @@ def period_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=PERIOD_LABELS["daily"])],
             [KeyboardButton(text=PERIOD_LABELS["weekly"])],
             [KeyboardButton(text=PERIOD_LABELS["biweekly"])],
+            [KeyboardButton(text=PERIOD_LABELS["monthly"])],
             [KeyboardButton(text=PERIOD_LABELS["quarterly"])],
         ],
         resize_keyboard=True,
